@@ -11,7 +11,8 @@ Dashboard statis untuk membantu user melakukan matching data FMS dan HAUD langsu
   - FMS: `Date` dan `B-Number Processed`
   - HAUD: `Date`, `sourceAddr`, dan `destinationAddr`
 - Pilih range tanggal FMS yang ingin diproses
-- HAUD otomatis dicari dari H-1, H, dan H+1 untuk setiap tanggal FMS
+- Range tanggal hanya memfilter FMS
+- HAUD dibaca penuh, lalu dicocokkan ke setiap FMS berdasarkan H-1, H, dan H+1
 - Normalisasi nomor/reference
 - Preview data dan hasil matching
 - Download output dalam format CSV atau JSON dengan kolom:

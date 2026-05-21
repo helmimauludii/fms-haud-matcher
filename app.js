@@ -274,10 +274,8 @@ async function runMatching(event) {
     const fmsRows = await filterComparableRows("fms", config, config.processStartDate, config.processEndDate, 10, 28);
     addProcessLog(`FMS masuk range: ${formatNumber(fmsRows.length)} dari ${formatNumber(state.rows.fms.length)} baris.`);
 
-    const haudStart = addDays(config.processStartDate, -1);
-    const haudEnd = addDays(config.processEndDate, 1);
-    const haudPool = await filterComparableRows("haud", config, haudStart, haudEnd, 30, 46);
-    addProcessLog(`HAUD dalam window H-1 sampai H+1: ${formatNumber(haudPool.length)} dari ${formatNumber(state.rows.haud.length)} baris.`);
+    const haudPool = await readComparableRows("haud", config, 30, 46);
+    addProcessLog(`HAUD dibaca penuh: ${formatNumber(haudPool.length)} dari ${formatNumber(state.rows.haud.length)} baris valid.`);
 
     setProcessStatus("running", "Membuat index HAUD", "Mengelompokkan HAUD berdasarkan destinationAddr agar matching lebih cepat.", 50);
     await yieldToUi();
@@ -344,6 +342,33 @@ async function filterComparableRows(type, config, startDate, endDate, progressSt
   }
 
   return filtered;
+}
+
+async function readComparableRows(type, config, progressStart, progressEnd) {
+  const rows = state.rows[type];
+  const parsed = [];
+  const batchSize = 5000;
+
+  for (let index = 0; index < rows.length; index += batchSize) {
+    const batch = rows.slice(index, index + batchSize);
+    batch.forEach((row, batchIndex) => {
+      const comparable = buildComparableRow(row, index + batchIndex, type, config);
+      if (comparable.date) parsed.push(comparable);
+    });
+
+    const ratio = rows.length ? Math.min((index + batch.length) / rows.length, 1) : 1;
+    const progress = progressStart + (progressEnd - progressStart) * ratio;
+    const label = type === "haud" ? "Baca HAUD penuh" : "Baca data";
+    setProcessStatus(
+      "running",
+      label,
+      `${label}: ${formatNumber(index + batch.length)} dari ${formatNumber(rows.length)} baris dibaca.`,
+      progress,
+    );
+    await yieldToUi();
+  }
+
+  return parsed;
 }
 
 function indexHaudRows(haudRows) {
@@ -420,10 +445,10 @@ function buildProcessSummary(config, fmsRows, haudPool, output) {
   const previewLines = [
     `Range FMS: ${els.processStartDate.value} s/d ${els.processEndDate.value}`,
     `FMS diproses: ${formatNumber(fmsRows.length)} dari ${formatNumber(state.rows.fms.length)} baris`,
-    `HAUD dibaca: ${formatNumber(haudPool.length)} dari ${formatNumber(state.rows.haud.length)} baris`,
+    `HAUD dibaca penuh: ${formatNumber(haudPool.length)} dari ${formatNumber(state.rows.haud.length)} baris valid`,
     `Matched output: ${formatNumber(matchedRows.length)} baris`,
     `FMS tanpa match: ${formatNumber(fmsOnlyRows.length)} baris`,
-    "Window HAUD: H-1, H, H+1 untuk setiap tanggal FMS",
+    "Rule HAUD: tidak difilter oleh range dashboard; hanya dicek H-1, H, H+1 terhadap masing-masing tanggal FMS",
     "Output: fms_row, fms_date, B-Number Processed, haud_row, haud_date, sourceAddr, destinationAddr, match_type.",
   ];
 
