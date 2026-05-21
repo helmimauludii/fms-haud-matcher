@@ -122,7 +122,7 @@ function loadSheet(type, sheetName) {
   if (!workbook || !sheetName) return;
 
   const worksheet = workbook.Sheets[sheetName];
-  state.rows[type] = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: false });
+  state.rows[type] = XLSX.utils.sheet_to_json(worksheet, { defval: "", raw: true });
 
   const columns = collectColumns(state.rows[type]);
   if (type === "haud") populateColumnSelect(type, "source", columns);
@@ -272,9 +272,11 @@ async function runMatching(event) {
     await yieldToUi();
 
     const fmsRows = await filterComparableRows("fms", config, config.processStartDate, config.processEndDate, 10, 28);
+    fmsRows.sort(compareComparableRows);
     addProcessLog(`FMS masuk range: ${formatNumber(fmsRows.length)} dari ${formatNumber(state.rows.fms.length)} baris.`);
 
     const haudPool = await readComparableRows("haud", config, 30, 46);
+    haudPool.sort(compareComparableRows);
     addProcessLog(`HAUD dibaca penuh: ${formatNumber(haudPool.length)} dari ${formatNumber(state.rows.haud.length)} baris valid.`);
 
     setProcessStatus("running", "Membuat index HAUD", "Mengelompokkan HAUD berdasarkan destinationAddr agar matching lebih cepat.", 50);
@@ -380,6 +382,8 @@ function indexHaudRows(haudRows) {
     index.get(row.key).push(row);
   });
 
+  index.forEach((rows) => rows.sort(compareComparableRows));
+
   return index;
 }
 
@@ -435,7 +439,7 @@ async function matchRowsInBatches(fmsRows, haudIndex, config) {
     await yieldToUi();
   }
 
-  return output;
+  return output.sort(compareOutputRows);
 }
 
 function buildProcessSummary(config, fmsRows, haudPool, output) {
@@ -445,6 +449,7 @@ function buildProcessSummary(config, fmsRows, haudPool, output) {
   const previewLines = [
     `Range FMS: ${els.processStartDate.value} s/d ${els.processEndDate.value}`,
     `FMS diproses: ${formatNumber(fmsRows.length)} dari ${formatNumber(state.rows.fms.length)} baris`,
+    `Distribusi tanggal FMS: ${formatDateDistribution(fmsRows) || "-"}`,
     `HAUD dibaca penuh: ${formatNumber(haudPool.length)} dari ${formatNumber(state.rows.haud.length)} baris valid`,
     `Matched output: ${formatNumber(matchedRows.length)} baris`,
     `FMS tanpa match: ${formatNumber(fmsOnlyRows.length)} baris`,
@@ -606,6 +611,27 @@ function getDateStats(rows, dateColumn, config) {
   };
 }
 
+function formatDateDistribution(rows) {
+  const counts = new Map();
+
+  rows.forEach((row) => {
+    const label = formatDateForDisplay(row.date);
+    if (!label) return;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+
+  return Array.from(counts.entries())
+    .sort(([left], [right]) => parseDisplayDate(left) - parseDisplayDate(right))
+    .map(([date, count]) => `${date}: ${formatNumber(count)}`)
+    .join(", ");
+}
+
+function parseDisplayDate(value) {
+  const match = String(value).match(/^(\d{2})\/(\d{2})\/(\d{2})$/);
+  if (!match) return 0;
+  return new Date(normalizeYear(Number(match[3])), Number(match[2]) - 1, Number(match[1])).getTime();
+}
+
 function normalizeYear(year) {
   if (year < 100) return year + 2000;
   return year;
@@ -627,13 +653,34 @@ function addDays(date, days) {
 
 function isDateInRange(date, startDate, endDate) {
   if (!date || !startDate || !endDate) return false;
-  const value = clearTime(date).getTime();
-  return value >= clearTime(startDate).getTime() && value <= clearTime(endDate).getTime();
+  const value = dateKey(date);
+  return value >= dateKey(startDate) && value <= dateKey(endDate);
 }
 
 function datesEqual(leftDate, rightDate) {
   if (!leftDate || !rightDate) return false;
-  return clearTime(leftDate).getTime() === clearTime(rightDate).getTime();
+  return dateKey(leftDate) === dateKey(rightDate);
+}
+
+function dateKey(date) {
+  const cleared = clearTime(date);
+  return [
+    cleared.getFullYear(),
+    String(cleared.getMonth() + 1).padStart(2, "0"),
+    String(cleared.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function compareComparableRows(left, right) {
+  const dateCompare = dateKey(left.date).localeCompare(dateKey(right.date));
+  if (dateCompare !== 0) return dateCompare;
+  return left.excelRow - right.excelRow;
+}
+
+function compareOutputRows(left, right) {
+  const dateCompare = parseDisplayDate(left.fms_date) - parseDisplayDate(right.fms_date);
+  if (dateCompare !== 0) return dateCompare;
+  return Number(left.fms_row || 0) - Number(right.fms_row || 0);
 }
 
 function getMatchType(fmsDate, haudDate) {
