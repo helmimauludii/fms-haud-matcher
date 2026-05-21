@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FMS HAUD Matching Dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Navigasi utama">
+        <div class="brand">
+          <div class="brand-mark">FM</div>
+          <div>
+            <p class="brand-name">FMS Matcher</p>
+            <p class="brand-subtitle">HAUD reconciliation</p>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <a class="nav-item active" href="#upload">Upload</a>
+          <a class="nav-item" href="#rules">Rules</a>
+          <a class="nav-item" href="#results">Hasil</a>
+        </nav>
+
+        <div class="sidebar-note">
+          <span class="status-dot"></span>
+          Siap memproses file secara lokal di browser.
+        </div>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Operational Dashboard</p>
+            <h1>Matching FMS dan HAUD dalam satu alur upload</h1>
+            <p class="topbar-copy">
+              Upload dua file, pilih range tanggal FMS, lalu sistem mencari pasangan HAUD di H-1, H, dan H+1.
+            </p>
+          </div>
+          <button class="ghost-button" type="button" id="resetButton">Reset</button>
+        </header>
+
+        <section class="metric-grid" aria-label="Ringkasan proses">
+          <article class="metric-card">
+            <span>File masuk</span>
+            <strong id="fileMetric">0/2</strong>
+            <small>FMS dan HAUD</small>
+          </article>
+          <article class="metric-card">
+            <span>Range proses</span>
+            <strong id="dateMetric">Belum dipilih</strong>
+            <small>tanggal FMS yang diproses</small>
+          </article>
+          <article class="metric-card">
+            <span>Match rate</span>
+            <strong id="matchMetric">-</strong>
+            <small>berdasarkan run terakhir</small>
+          </article>
+          <article class="metric-card">
+            <span>Output</span>
+            <strong id="outputMetric">Belum ada</strong>
+            <small>CSV siap download</small>
+          </article>
+        </section>
+
+        <section class="work-grid">
+          <form class="panel main-panel" id="matchingForm">
+            <section id="upload">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Langkah 1</p>
+                  <h2>Upload file sumber</h2>
+                </div>
+                <span class="badge">XLSX, XLS, CSV</span>
+              </div>
+
+              <div class="upload-grid">
+                <label class="upload-zone" data-zone="fms">
+                  <input type="file" id="fmsFile" accept=".xlsx,.xls,.csv" />
+                  <span class="upload-title">FMS Data</span>
+                  <span class="upload-help">File transaksi dari FMS</span>
+                  <span class="file-name" id="fmsFileName">Pilih file FMS</span>
+                </label>
+
+                <label class="upload-zone" data-zone="haud">
+                  <input type="file" id="haudFile" accept=".xlsx,.xls,.csv" />
+                  <span class="upload-title">HAUD Data</span>
+                  <span class="upload-help">File pembanding dari HAUD</span>
+                  <span class="file-name" id="haudFileName">Pilih file HAUD</span>
+                </label>
+              </div>
+            </section>
+
+            <section id="rules">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Langkah 2</p>
+                  <h2>Aturan proses</h2>
+                </div>
+              </div>
+
+              <div class="form-grid">
+                <label>
+                  Tanggal mulai
+                  <input type="date" id="processStartDate" required />
+                </label>
+
+                <label>
+                  Tanggal selesai
+                  <input type="date" id="processEndDate" required />
+                </label>
+
+                <label>
+                  Sheet FMS
+                  <select id="fmsSheet" disabled>
+                    <option value="">Upload file dulu</option>
+                  </select>
+                </label>
+
+                <label>
+                  Sheet HAUD
+                  <select id="haudSheet" disabled>
+                    <option value="">Upload file dulu</option>
+                  </select>
+                </label>
+
+                <label>
+                  Rule tanggal
+                  <input class="readonly-field" type="text" value="HAUD dicari di H-1, H, dan H+1" readonly />
+                </label>
+
+                <label>
+                  Format tanggal file
+                  <select id="dateFormat">
+                    <option value="auto">Auto detect</option>
+                    <option value="dmy">DD/MM/YY</option>
+                    <option value="mdy">MM/DD/YY</option>
+                  </select>
+                </label>
+
+                <label>
+                  Kolom default
+                  <input class="readonly-field" type="text" value="FMS B-Number -> HAUD destinationAddr" readonly />
+                </label>
+
+                <label>
+                  Format output
+                  <select id="outputFormat">
+                    <option value="csv">CSV</option>
+                    <option value="json">JSON</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="mapping-grid">
+                <div class="mapping-card">
+                  <h3>Mapping FMS</h3>
+                  <label>
+                    Kolom nomor / reference
+                    <select id="fmsNumberColumn" disabled></select>
+                  </label>
+                  <label>
+                    Kolom tanggal
+                    <select id="fmsDateColumn" disabled></select>
+                  </label>
+                </div>
+
+                <div class="mapping-card">
+                  <h3>Mapping HAUD</h3>
+                  <label>
+                    Kolom source
+                    <select id="haudSourceColumn" disabled></select>
+                  </label>
+                  <label>
+                    Kolom nomor / reference
+                    <select id="haudNumberColumn" disabled></select>
+                  </label>
+                  <label>
+                    Kolom tanggal
+                    <select id="haudDateColumn" disabled></select>
+                  </label>
+                </div>
+              </div>
+
+              <fieldset class="option-group">
+                <legend>Normalisasi data</legend>
+                <label class="check-row">
+                  <input type="checkbox" id="ignoreCase" checked />
+                  Abaikan kapital/huruf kecil
+                </label>
+                <label class="check-row">
+                  <input type="checkbox" id="stripSeparators" checked />
+                  Hilangkan spasi, titik, slash, dan dash pada nomor
+                </label>
+                <label class="check-row">
+                  <input type="checkbox" id="removeLeadingZero" />
+                  Hilangkan nol di depan nomor
+                </label>
+                <label class="check-row">
+                  <input type="checkbox" id="includeUnmatched" checked />
+                  Sertakan FMS yang tidak match di output
+                </label>
+              </fieldset>
+            </section>
+
+            <div class="action-row">
+              <button class="secondary-button" type="button" id="previewButton">Preview Data</button>
+              <button class="primary-button" type="submit">Jalankan Matching</button>
+            </div>
+          </form>
+
+          <aside class="panel side-panel">
+            <section>
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Readiness</p>
+                  <h2>Kesiapan</h2>
+                </div>
+              </div>
+              <div class="readiness" id="readinessMeter" style="--ready: 0%">
+                <span></span>
+              </div>
+              <ul class="checklist" id="checklist">
+                <li data-check="fms">FMS belum diupload</li>
+                <li data-check="haud">HAUD belum diupload</li>
+                <li data-check="date">Range tanggal belum lengkap</li>
+                <li data-check="mapping">Mapping kolom belum lengkap</li>
+              </ul>
+            </section>
+
+            <section>
+              <div class="section-heading compact">
+                <div>
+                  <p class="eyebrow">Preview</p>
+                  <h2>Cuplikan file</h2>
+                </div>
+              </div>
+              <div class="preview-box" id="previewBox">Belum ada preview.</div>
+            </section>
+          </aside>
+        </section>
+
+        <section class="panel result-panel" id="results">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Langkah 3</p>
+              <h2>Hasil matching</h2>
+            </div>
+            <button class="ghost-button" type="button" id="downloadButton" disabled>Download</button>
+          </div>
+
+          <div class="process-box" id="processBox" data-state="idle">
+            <div class="process-header">
+              <div>
+                <span class="process-state" id="processState">Belum dijalankan</span>
+                <strong id="processTitle">Menunggu proses matching</strong>
+              </div>
+              <span id="processPercent">0%</span>
+            </div>
+            <div class="process-bar" id="processBar" style="--progress: 0%">
+              <span></span>
+            </div>
+            <p id="processMessage">Upload file, lengkapi range tanggal dan mapping, lalu klik Jalankan Matching.</p>
+            <ol class="process-log" id="processLog">
+              <li>Belum ada aktivitas proses.</li>
+            </ol>
+          </div>
+
+          <div class="result-stats" aria-label="Statistik hasil">
+            <div><span>Matched</span><strong id="matchedCount">0</strong></div>
+            <div><span>FMS tanpa match</span><strong id="fmsOnlyCount">0</strong></div>
+            <div><span>Window HAUD</span><strong id="haudOnlyCount">0</strong></div>
+            <div><span>Total output</span><strong id="totalCount">0</strong></div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>fms_row</th>
+                  <th>fms_date</th>
+                  <th>B-Number Processed</th>
+                  <th>haud_row</th>
+                  <th>haud_date</th>
+                  <th>sourceAddr</th>
+                  <th>destinationAddr</th>
+                  <th>match_type</th>
+                </tr>
+              </thead>
+              <tbody id="resultBody">
+                <tr>
+                  <td colspan="8">Belum ada proses.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
