@@ -106,7 +106,7 @@ async function handleFile(type, file) {
   document.querySelector(`#${type}FileName`).textContent = file.name;
 
   const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array", cellDates: true });
+  const workbook = XLSX.read(buffer, { type: "array", cellDates: false });
   state.workbook[type] = workbook;
 
   const sheetSelect = type === "fms" ? els.fmsSheet : els.haudSheet;
@@ -296,6 +296,11 @@ async function runMatching(event) {
     if (fmsRows.length === 0 || output.length === 0) {
       setProcessStatus("warning", "Proses selesai tanpa output", processSummary.message, 100);
       addProcessLog(processSummary.message);
+    } else if (processSummary.hasMissingDates) {
+      setProcessStatus("warning", "Output parsial dibuat", processSummary.message, 100);
+      addProcessLog(processSummary.message);
+      addProcessLog(`Output parsial siap: ${formatNumber(output.length)} baris. File akan diunduh otomatis.`);
+      downloadOutput();
     } else {
       setProcessStatus("success", "Proses berhasil", processSummary.message, 100);
       addProcessLog(`Output siap: ${formatNumber(output.length)} baris. File akan diunduh otomatis.`);
@@ -444,6 +449,9 @@ async function matchRowsInBatches(fmsRows, haudIndex, config) {
 
 function buildProcessSummary(config, fmsRows, haudPool, output) {
   const fmsDateStats = getDateStats(state.rows.fms, config.fmsDateColumn, config);
+  const requestedDates = listDateRange(config.processStartDate, config.processEndDate);
+  const coveredDateKeys = new Set(fmsRows.map((row) => dateKey(row.date)));
+  const missingDates = requestedDates.filter((date) => !coveredDateKeys.has(dateKey(date)));
   const matchedRows = output.filter((row) => row.match_type !== "FMS_ONLY");
   const fmsOnlyRows = output.filter((row) => row.match_type === "FMS_ONLY");
   const previewLines = [
@@ -457,8 +465,12 @@ function buildProcessSummary(config, fmsRows, haudPool, output) {
     "Output: fms_row, fms_date, B-Number Processed, haud_row, haud_date, sourceAddr, destinationAddr, match_type.",
   ];
 
-  if (fmsRows.length === 0) {
+  if (missingDates.length) {
     previewLines.push("");
+    previewLines.push(`PERHATIAN: Tidak ada baris FMS untuk tanggal: ${missingDates.map(formatDateForDisplay).join(", ")}.`);
+  }
+
+  if (fmsRows.length === 0) {
     previewLines.push("PERHATIAN: Tidak ada tanggal FMS yang masuk range.");
     previewLines.push(`Tanggal FMS terdeteksi: ${fmsDateStats.min || "-"} s/d ${fmsDateStats.max || "-"}`);
     previewLines.push(`Contoh tanggal FMS: ${fmsDateStats.samples.join(", ") || "-"}`);
@@ -466,6 +478,7 @@ function buildProcessSummary(config, fmsRows, haudPool, output) {
     return {
       previewText: previewLines.join("\n"),
       message: "Tidak ada baris FMS dalam range yang dipilih. Output tidak dibuat otomatis karena tidak ada data yang diproses.",
+      hasMissingDates: true,
     };
   }
 
@@ -473,12 +486,22 @@ function buildProcessSummary(config, fmsRows, haudPool, output) {
     return {
       previewText: previewLines.join("\n"),
       message: "Range FMS valid, tetapi tidak ada pasangan HAUD di window H-1/H/H+1 dan opsi unmatched tidak disertakan.",
+      hasMissingDates: missingDates.length > 0,
+    };
+  }
+
+  if (missingDates.length) {
+    return {
+      previewText: previewLines.join("\n"),
+      message: `Output dibuat untuk tanggal FMS yang tersedia, tetapi tanggal ${missingDates.map(formatDateForDisplay).join(", ")} tidak ditemukan pada data FMS.`,
+      hasMissingDates: true,
     };
   }
 
   return {
     previewText: previewLines.join("\n"),
     message: `Berhasil membuat ${formatNumber(output.length)} baris output dari ${formatNumber(fmsRows.length)} baris FMS yang diproses.`,
+    hasMissingDates: false,
   };
 }
 
@@ -649,6 +672,14 @@ function addDays(date, days) {
   const next = clearTime(date);
   next.setDate(next.getDate() + days);
   return next;
+}
+
+function listDateRange(startDate, endDate) {
+  const dates = [];
+  for (let current = clearTime(startDate); dateKey(current) <= dateKey(endDate); current = addDays(current, 1)) {
+    dates.push(current);
+  }
+  return dates;
 }
 
 function isDateInRange(date, startDate, endDate) {
